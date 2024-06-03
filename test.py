@@ -154,22 +154,27 @@ def main():
         current_readings = drone.get_sensor_readings(track)
             
         if(current_readings[2] > 1) and is_going_up:
+            is_going_right = True
+            is_going_left = True
             go_up(drone, track)
         elif(current_readings[0] > 1) and is_going_right:
+            is_going_up = True
             go_right(drone, track)
-        elif(current_readings[3] > 1 and is_going_down):
+        elif(current_readings[3] > 1) and is_going_down:
             is_going_right = True
             is_going_up = False
             go_down(drone, track)
-        elif(current_readings[1] > 1 and is_going_left):
+        elif(current_readings[1] > 1) and is_going_left:
             is_going_right = False
             is_going_down = True
+            is_going_up = False
             go_left(drone, track)
         else:
-            is_going_up = True
-            is_going_down = True
-            is_going_right = True
+            is_going_up = False
+            is_going_down = False
+            is_going_right = False
             is_going_left = True
+            go_up(drone, track)
 
         draw_track(track)
         drone.draw_history()
