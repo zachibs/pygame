@@ -27,7 +27,7 @@ class Drone:
 
     def draw(self):
         pygame.draw.circle(screen, DRONE_COLOR, (self.x, self.y), DRONE_RADIUS)
-    
+
     def move(self, dx, dy, track):
         new_x = self.x + dx
         new_y = self.y + dy
@@ -92,8 +92,22 @@ def image_to_matrix(img, threshold=128):
             row.append(img.getpixel((x, y)))
         matrix.append(row)
     return matrix
+
+def find_closest_track_point(start_x, start_y, track):
+    min_distance = float('inf')
+    closest_point = (start_x, start_y)
+
+    for segment in track:
+        center_x, center_y = segment.center
+        distance = ((center_x - start_x) ** 2 + (center_y - start_y) ** 2) ** 0.5
+        if distance < min_distance:
+            min_distance = distance
+            closest_point = (center_x, center_y)
+
+    return closest_point
+
 def main():
-    
+
     matrix = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -104,12 +118,17 @@ def main():
     [1, 0, 0, 0, 0, 1, 0, 0, 0, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     ]
-    
+
     matrix = image_to_matrix(img)
     cell_size = 1
 
     track = build_track_from_matrix(matrix, cell_size)
     start_x, start_y = 125, 125
+
+    initial_rect = pygame.Rect(start_x, start_y, 1, 1)
+    if not any(segment.colliderect(initial_rect) for segment in track):
+        start_x, start_y = find_closest_track_point(start_x, start_y, track)
+
     drone = Drone(start_x, start_y)
 
     clock = pygame.time.Clock()
@@ -120,19 +139,19 @@ def main():
     is_going_left = True
     is_going_right = True
     speed = VELOCITY
-    
+
     def go_left(drone, track):
         drone.move((-1) * speed, 0, track)
-    
+
     def go_right(drone, track):
         drone.move(1 * speed, 0, track)
-    
+
     def go_up(drone, track):
         drone.move(0, (-1) * speed, track)
-    
+
     def go_down(drone, track):
         drone.move(0, 1 * speed, track)
-        
+
     while running:
         start_time = time.time()
         screen.fill(BACKGROUND_COLOR)
@@ -149,43 +168,53 @@ def main():
             go_up(drone, track)
         if keys[pygame.K_DOWN]:
             go_down(drone, track)
-        
-        
+
+
         current_readings = drone.get_sensor_readings(track)
-            
+        prev_readings = current_readings
+
         if(current_readings[2] > 1) and is_going_up:
             is_going_right = True
             is_going_left = True
             go_up(drone, track)
+            prev_readings = drone.get_sensor_readings(track)
         elif(current_readings[0] > 1) and is_going_right:
             is_going_up = True
             go_right(drone, track)
+            prev_readings = drone.get_sensor_readings(track)
         elif(current_readings[3] > 1) and is_going_down:
             is_going_right = True
             is_going_up = False
             go_down(drone, track)
+            prev_readings = drone.get_sensor_readings(track)
         elif(current_readings[1] > 1) and is_going_left:
             is_going_right = False
             is_going_down = True
             is_going_up = False
             go_left(drone, track)
+            prev_readings = drone.get_sensor_readings(track)
         else:
             is_going_up = False
             is_going_down = False
             is_going_right = False
             is_going_left = True
             go_up(drone, track)
+            prev_readings = drone.get_sensor_readings(track)
+
+        #if prev_readings == current_readings:
+        #    new_x, new_y = find_closest_track_point(drone.x, drone.y, track)
+        #    drone = Drone(new_x, new_y)
 
         draw_track(track)
         drone.draw_history()
         drone.draw()
 
         readings = current_readings
-        # print(f"right: {readings[0]}, left: {readings[1]}, up: {readings[2]}, down: {readings[3]}") 
+        # print(f"right: {readings[0]}, left: {readings[1]}, up: {readings[2]}, down: {readings[3]}")
 
         pygame.display.flip()
         clock.tick(30)
-        
+
     pygame.quit()
 
 if __name__ == "__main__":
