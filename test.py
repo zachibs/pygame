@@ -13,7 +13,7 @@ TRACK_COLOR = (50, 50, 50)
 HISTORY_COLOR = (255, 255, 0)
 
 DRONE_RADIUS = 10
-VELOCITY = 5
+VELOCITY = 2.5
 
 pygame.init()
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -24,15 +24,38 @@ class Drone:
         self.x = x
         self.y = y
         self.history = []
+        self.is_in_return = False
 
     def draw(self):
         pygame.draw.circle(screen, DRONE_COLOR, (self.x, self.y), DRONE_RADIUS)
-
+        
+    
+    def check_if_in_track_if_so_move(self, x, y, track):
+        # if self.is_inside_track(x, y, track):
+            self.history.append((x, y))
+    
+    def append_radius(self, track):
+        if(self.is_in_return):
+            return
+        directions = []
+        for index in range(DRONE_RADIUS):
+            directions.append((self.x + index, self.y))
+            directions.append((self.x, self.y + index))
+            directions.append((self.x + index, self.y + index))
+            directions.append((self.x - index, self.y))
+            directions.append((self.x, self.y - index))
+            directions.append((self.x - index, self.y - index))
+            directions.append((self.x + index, self.y - index))
+            directions.append((self.x - index, self.y + index))
+                
+        executor.map(lambda d: self.check_if_in_track_if_so_move(d[0], d[1], track), directions)
+        
     def move(self, dx, dy, track):
         new_x = self.x + dx
         new_y = self.y + dy
         if self.is_inside_track(new_x, new_y, track):
             self.history.append((self.x, self.y))
+            self.append_radius(track)
             self.x = new_x
             self.y = new_y
 
@@ -40,9 +63,9 @@ class Drone:
         start_time = time.time()
         for segment in track:
             if segment.collidepoint(x, y):
-                print(f"is_inside_track duration={time.time() - start_time}")
+                # print(f"is_inside_track duration={time.time() - start_time}")
                 return True
-        print(f"is_inside_track duration={time.time() - start_time}")
+        # print(f"is_inside_track duration={time.time() - start_time}")
         return False
 
     def draw_history(self):
@@ -65,7 +88,7 @@ class Drone:
             if x < 0 or x >= WINDOW_WIDTH or y < 0 or y >= WINDOW_HEIGHT or not self.is_inside_track(x, y, track):
                 break
             distance += 1
-            if(distance > 4):
+            if(distance > 1):
                 return distance
         # print(f"calculate_sensor_range duration={time.time() - start_time}")
         return distance
@@ -139,6 +162,8 @@ def main():
     is_going_left = True
     is_going_right = True
     speed = VELOCITY
+    
+    steps = []
 
     def go_left(drone, track):
         drone.move((-1) * speed, 0, track)
@@ -151,69 +176,76 @@ def main():
 
     def go_down(drone, track):
         drone.move(0, 1 * speed, track)
+        
+    start_time = time.time()
+        
 
     while running:
-        start_time = time.time()
+        start_time_running = time.time()
         screen.fill(BACKGROUND_COLOR)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            go_left(drone, track)
-        if keys[pygame.K_RIGHT]:
-            go_right(drone, track)
-        if keys[pygame.K_UP]:
-            go_up(drone, track)
-        if keys[pygame.K_DOWN]:
-            go_down(drone, track)
-
-
-        current_readings = drone.get_sensor_readings(track)
-        prev_readings = current_readings
-
-        if(current_readings[2] > 1) and is_going_up:
-            is_going_right = True
-            is_going_left = True
-            go_up(drone, track)
-            prev_readings = drone.get_sensor_readings(track)
-        elif(current_readings[0] > 1) and is_going_right:
-            is_going_up = True
-            go_right(drone, track)
-            prev_readings = drone.get_sensor_readings(track)
-        elif(current_readings[3] > 1) and is_going_down:
-            is_going_right = True
-            is_going_up = False
-            go_down(drone, track)
-            prev_readings = drone.get_sensor_readings(track)
-        elif(current_readings[1] > 1) and is_going_left:
-            is_going_right = False
-            is_going_down = True
-            is_going_up = False
-            go_left(drone, track)
-            prev_readings = drone.get_sensor_readings(track)
+        
+        if(time.time() - start_time) > 8*60:
+            break
+        elif(time.time() - start_time) > 1*25:
+            func = steps.pop()
+            func(drone, track)
         else:
-            is_going_up = False
-            is_going_down = False
-            is_going_right = False
-            is_going_left = True
-            go_up(drone, track)
-            prev_readings = drone.get_sensor_readings(track)
 
-        #if prev_readings == current_readings:
-        #    new_x, new_y = find_closest_track_point(drone.x, drone.y, track)
-        #    drone = Drone(new_x, new_y)
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_LEFT]:
+                go_left(drone, track)
+            if keys[pygame.K_RIGHT]:
+                go_right(drone, track)
+            if keys[pygame.K_UP]:
+                go_up(drone, track)
+            if keys[pygame.K_DOWN]:
+                go_down(drone, track)
+
+
+            current_readings = drone.get_sensor_readings(track)
+
+            if(current_readings[2] > 1) and is_going_up:
+                is_going_right = True
+                is_going_left = True
+                go_up(drone, track)
+                steps.append(go_down)
+            elif(current_readings[0] > 1) and is_going_right:
+                is_going_up = True
+                go_right(drone, track)
+                steps.append(go_left)
+            elif(current_readings[3] > 1) and is_going_down:
+                is_going_right = True
+                is_going_up = False
+                go_down(drone, track)
+                steps.append(go_up)
+            elif(current_readings[1] > 1) and is_going_left:
+                is_going_right = False
+                is_going_down = True
+                is_going_up = False
+                go_left(drone, track)
+                steps.append(go_right)
+            else:
+                is_going_up = False
+                is_going_down = False
+                is_going_right = False
+                is_going_left = True
+                go_up(drone, track)
+                steps.append(go_down)
+            
 
         draw_track(track)
         drone.draw_history()
         drone.draw()
 
-        readings = current_readings
+        # readings = current_readings
         # print(f"right: {readings[0]}, left: {readings[1]}, up: {readings[2]}, down: {readings[3]}")
 
         pygame.display.flip()
         clock.tick(30)
+        print(f"time in running = {time.time() - start_time_running}")
 
     pygame.quit()
 
